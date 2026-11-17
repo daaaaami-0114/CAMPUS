@@ -1,0 +1,546 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한양대학교 ERICA 제휴 맵 (Google Maps)</title>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+      color: #333;
+    }
+
+    /* 상단 필터바 - 기존 디자인 유지 */
+    #filter-bar {
+      height: 70px;
+      background: #003666;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      z-index: 10;
+      position: relative;
+    }
+
+    #filter-bar h2 {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .select-group label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    select {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      background-color: #ffffff;
+      color: #333;
+    }
+
+    /* 지도 영역 - 기존 크기 유지 */
+    #map {
+      width: 100vw;
+      height: calc(100vh - 70px);
+    }
+
+    /* Google InfoWindow에 기존 카드 디자인 적용 */
+    .benefit-card {
+      width: 280px;
+      padding: 16px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .benefit-card .header-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .benefit-card h3 {
+      font-size: 16px;
+      color: #003666;
+      margin-bottom: 2px;
+    }
+
+    .benefit-card .category {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .benefit-card .info-section {
+      border-top: 1px solid #eee;
+      padding-top: 8px;
+      margin-top: 6px;
+    }
+
+    .benefit-card .info-title {
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 2px;
+    }
+
+    .benefit-card .benefit-text {
+      color: #e63946;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .benefit-card .condition-text {
+      color: #555;
+    }
+
+    .benefit-card .period-text {
+      color: #888;
+      font-size: 11px;
+    }
+
+    /* 소속 주체별 태그 색상 - 기존 값 유지 */
+    .tag-총학생회 { background-color: #e63946; }
+    .tag-단과대 { background-color: #2a9d8f; }
+    .tag-학과 { background-color: #457b9d; }
+    .tag-동아리 { background-color: #f4a261; }
+  </style>
+
+  <!-- CSV 파일 읽기용 라이브러리 -->
+  <script src="https://unpkg.com/papaparse@5.7.0/papaparse.min.js"></script>
+</head>
+
+<body>
+
+  <!-- 기존 필터바 유지 -->
+  <div id="filter-bar">
+    <h2>ERICA 제휴 맵</h2>
+
+    <div class="select-group">
+      <label for="main-category">소속 분류:</label>
+      <select id="main-category">
+        <option value="ALL">전체 보기</option>
+        <option value="총학생회">총학생회</option>
+        <option value="단과대">단과대</option>
+        <option value="학과">학과</option>
+        <option value="동아리">동아리</option>
+      </select>
+    </div>
+
+    <div class="select-group">
+      <label for="sub-category">하위 항목:</label>
+      <select id="sub-category" disabled>
+        <option value="ALL">전체 항목</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 지도 영역 -->
+  <div id="map"></div>
+
+  <script>
+    // -------------------------------------------------------
+    // 1. 제휴 가게 데이터 및 지도 상태
+    // -------------------------------------------------------
+
+    let partners = [];
+    let map;
+    let currentMarkers = [];
+    let currentInfoWindow = null;
+
+    let AdvancedMarkerElement;
+    let PinElement;
+
+    // 단체 유형별 색상
+    const orgColors = {
+      "총학생회": "#e63946",
+      "단과대": "#2a9d8f",
+      "학과": "#457b9d",
+      "동아리": "#f4a261"
+    };
+
+    const orgLabels = {
+      "총학생회": "총",
+      "단과대": "단",
+      "학과": "학",
+      "동아리": "동"
+    };
+
+    const mainSelect = document.getElementById("main-category");
+    const subSelect = document.getElementById("sub-category");
+
+    // CSV 내용이 정보창의 HTML 구조를 변경하지 않도록 처리
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[char]);
+    }
+
+    // -------------------------------------------------------
+    // 2. CSV 데이터 불러오기
+    // -------------------------------------------------------
+
+    async function loadPartnerData() {
+      const response = await fetch("./data/stores.csv");
+
+      if (!response.ok) {
+        throw new Error(
+          "stores.csv 파일을 불러오지 못했습니다. HTTP " +
+          response.status
+        );
+      }
+
+      const csvText = await response.text();
+
+      const result = Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: "greedy",
+        transformHeader: header =>
+          header.replace(/^\uFEFF/, "").trim()
+      });
+
+      const requiredFields = [
+        "id", "name", "category", "lat", "lng",
+        "orgType", "orgName", "benefit",
+        "condition", "period"
+      ];
+
+      const fields = result.meta.fields || [];
+
+      if (!requiredFields.every(field => fields.includes(field))) {
+        throw new Error("CSV 파일의 열 이름을 확인하세요.");
+      }
+
+      if (result.errors.length) {
+        throw new Error("CSV 형식 오류가 있습니다.");
+      }
+
+      partners = result.data.map(row => ({
+        id: String(row.id ?? "").trim(),
+        name: String(row.name ?? "").trim(),
+        category: String(row.category ?? "").trim(),
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        orgType: String(row.orgType ?? "").trim(),
+        orgName: String(row.orgName ?? "").trim(),
+        benefit: String(row.benefit ?? "").trim(),
+        condition: String(row.condition ?? "").trim(),
+        period: String(row.period ?? "").trim()
+      })).filter(item => {
+        // 위치와 필수 정보가 없는 행은 제외
+        return (
+          item.id &&
+          item.name &&
+          ["총학생회", "단과대", "학과", "동아리"]
+            .includes(item.orgType) &&
+          item.orgName &&
+          Number.isFinite(item.lat) &&
+          Number.isFinite(item.lng) &&
+          item.lat >= -90 && item.lat <= 90 &&
+          item.lng >= -180 && item.lng <= 180
+        );
+      });
+
+      updateSubCategories();
+    }
+
+    // -------------------------------------------------------
+    // 3. Google Maps 초기화
+    // -------------------------------------------------------
+
+    async function initMap() {
+      try {
+        const [mapsLibrary, markerLibrary] = await Promise.all([
+          google.maps.importLibrary("maps"),
+          google.maps.importLibrary("marker")
+        ]);
+
+        AdvancedMarkerElement =
+          markerLibrary.AdvancedMarkerElement;
+
+        PinElement = markerLibrary.PinElement;
+
+        // 한양대학교 ERICA 주변 지도
+        map = new mapsLibrary.Map(
+          document.getElementById("map"),
+          {
+            center: {
+              lat: 37.2972,
+              lng: 126.8350
+            },
+            zoom: 16,
+
+            // 테스트용 지도 ID
+            // 배포 시 본인 Google Cloud 지도 ID 권장
+            mapId: "DEMO_MAP_ID"
+          }
+        );
+
+        currentInfoWindow = new mapsLibrary.InfoWindow();
+
+        // CSV 불러오기
+        await loadPartnerData();
+
+        // 마커 표시
+        filterAndRender();
+
+      } catch (error) {
+        console.error("지도 초기화 오류:", error);
+
+        alert(
+          "지도를 불러오지 못했습니다.\n" +
+          "Google Maps API 설정과 CSV 파일을 확인하세요."
+        );
+      }
+    }
+
+    // -------------------------------------------------------
+    // 4. CSV 기반 하위 카테고리 생성
+    // -------------------------------------------------------
+
+    function updateSubCategories() {
+      const selectedMain = mainSelect.value;
+
+      subSelect.innerHTML =
+        '<option value="ALL">전체 항목</option>';
+
+      if (selectedMain === "ALL") {
+        subSelect.disabled = true;
+        return;
+      }
+
+      subSelect.disabled = false;
+
+      // CSV에 존재하는 제휴 단체명 자동 추출
+      const names = [
+        ...new Set(
+          partners
+            .filter(item => item.orgType === selectedMain)
+            .map(item => item.orgName)
+        )
+      ].sort((a, b) => a.localeCompare(b, "ko"));
+
+      names.forEach(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        subSelect.appendChild(option);
+      });
+    }
+
+    // -------------------------------------------------------
+    // 5. 정보창 HTML 생성
+    // -------------------------------------------------------
+
+    function makeInfoWindowContent(store) {
+      const first = store.partnerships[0];
+
+      const additionalCount =
+        store.partnerships.length - 1;
+
+      // 동일 가게가 여러 단체와 제휴할 수도 있음
+      const benefitSections = store.partnerships.map(p => `
+        <div class="info-section">
+
+          ${store.partnerships.length > 1 ? `
+            <span class="header-tag tag-${p.orgType}">
+              ${escapeHtml(p.orgType)} |
+              ${escapeHtml(p.orgName)}
+            </span>
+          ` : ""}
+
+          <div class="info-title">🎁 제휴 혜택</div>
+          <div class="benefit-text">
+            ${escapeHtml(p.benefit)}
+          </div>
+
+          <div class="info-title">📋 적용 조건</div>
+          <div class="condition-text">
+            ${escapeHtml(p.condition)}
+          </div>
+
+          <div class="info-title">📅 제휴 기간</div>
+          <div class="period-text">
+            ${escapeHtml(p.period)}
+          </div>
+
+        </div>
+      `).join("");
+
+      return `
+        <div class="benefit-card">
+
+          <span class="header-tag tag-${first.orgType}">
+            ${escapeHtml(first.orgType)} |
+            ${escapeHtml(first.orgName)}
+            ${additionalCount > 0
+              ? `외 ${additionalCount}건`
+              : ""}
+          </span>
+
+          <h3>${escapeHtml(store.name)}</h3>
+
+          <div class="category">
+            ${escapeHtml(store.category)}
+          </div>
+
+          ${benefitSections}
+
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------
+    // 6. Google Maps 마커 생성 및 필터링
+    // -------------------------------------------------------
+
+    function filterAndRender() {
+      if (!map) return;
+
+      const mainVal = mainSelect.value;
+      const subVal = subSelect.value;
+
+      // 기존 마커 제거
+      currentMarkers.forEach(marker => {
+        marker.map = null;
+      });
+
+      currentMarkers = [];
+      currentInfoWindow.close();
+
+      // 선택한 단체 기준으로 필터
+      const filtered = partners.filter(item => {
+        const matchMain =
+          mainVal === "ALL" ||
+          item.orgType === mainVal;
+
+        const matchSub =
+          subVal === "ALL" ||
+          item.orgName === subVal;
+
+        return matchMain && matchSub;
+      });
+
+      // 같은 가게 ID의 복수 제휴를 하나의 마커로 묶기
+      const groupedStores = new Map();
+
+      filtered.forEach(item => {
+        if (!groupedStores.has(item.id)) {
+          groupedStores.set(item.id, {
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            lat: item.lat,
+            lng: item.lng,
+            partnerships: []
+          });
+        }
+
+        groupedStores.get(item.id).partnerships.push(item);
+      });
+
+      // Google Maps 마커 생성
+      groupedStores.forEach(store => {
+        const types = [
+          ...new Set(
+            store.partnerships.map(p => p.orgType)
+          )
+        ];
+
+        const type =
+          types.length === 1 ? types[0] : "복수";
+
+        const pinColor =
+          orgColors[type] || "#64748b";
+
+        const pinLabel =
+          orgLabels[type] || "+";
+
+        const pin = new PinElement({
+          background: pinColor,
+          borderColor: "#ffffff",
+          glyphColor: "#ffffff",
+          glyphText: pinLabel
+        });
+
+        const marker = new AdvancedMarkerElement({
+          position: {
+            lat: store.lat,
+            lng: store.lng
+          },
+          map: map,
+          title: store.name,
+          content: pin,
+          gmpClickable: true
+        });
+
+        currentMarkers.push(marker);
+
+        // 마커 클릭 시 Google InfoWindow 표시
+        marker.addEventListener("gmp-click", () => {
+          currentInfoWindow.close();
+
+          currentInfoWindow.setContent(
+            makeInfoWindowContent(store)
+          );
+
+          currentInfoWindow.open({
+            map: map,
+            anchor: marker
+          });
+        });
+      });
+    }
+
+    // -------------------------------------------------------
+    // 7. 드롭다운 이벤트
+    // -------------------------------------------------------
+
+    mainSelect.addEventListener("change", function() {
+      updateSubCategories();
+      filterAndRender();
+    });
+
+    subSelect.addEventListener("change", filterAndRender);
+
+    // Google Maps 로드 후 호출할 함수
+    window.initMap = initMap;
+
+  </script>
+
+  <!-- Google Maps JavaScript API -->
+  <!-- YOUR_GOOGLE_MAPS_API_KEY 부분을 본인 키로 교체 -->
+  <script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&loading=async&callback=initMap&v=weekly&libraries=marker&language=ko">
+  </script>
+
+</body>
+</html>
