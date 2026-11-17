@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한양대학교 ERICA 제휴 맵</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+      color: #333;
+    }
+
+    /* 기존 상단 필터바 디자인 유지 */
+    #filter-bar {
+      height: 70px;
+      background: #003666;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      z-index: 10;
+      position: relative;
+    }
+
+    #filter-bar h2 {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .select-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .select-group label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    select {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      background-color: #ffffff;
+      color: #333;
+    }
+
+    /* 지도 영역 */
+    #map {
+      width: 100%;
+      height: calc(100vh - 70px);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- 상단 필터바 -->
+  <div id="filter-bar">
+    <h2>ERICA 제휴 맵</h2>
+
+    <div class="select-group">
+      <label for="main-category">소속 분류:</label>
+      <select id="main-category">
+        <option value="ALL">전체 보기</option>
+        <option value="총학생회">총학생회</option>
+        <option value="단과대">단과대</option>
+        <option value="학과">학과</option>
+        <option value="동아리">동아리</option>
+      </select>
+    </div>
+
+    <div class="select-group">
+      <label for="sub-category">하위 항목:</label>
+      <select id="sub-category" disabled>
+        <option value="ALL">전체 항목</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Google Maps 표시 영역 -->
+  <div id="map"></div>
+
+  <script>
+    // Google Maps 초기화
+    function initMap() {
+
+      // 한양대학교 ERICA 주변 좌표
+      const ericaLocation = {
+        lat: 37.2972,
+        lng: 126.8350
+      };
+
+      // 기본 지도 생성
+      const map = new google.maps.Map(
+        document.getElementById("map"),
+        {
+          center: ericaLocation,
+          zoom: 16
+        }
+      );
+
+      console.log("Google Maps 초기화 완료");
+    }
+
+    // API 인증 실패 감지
+    window.gm_authFailure = function() {
+      console.error("Google Maps API 인증 실패");
+      alert("Google Maps API 인증에 실패했습니다.");
+    };
+  </script>
+
+  <!-- Google Maps API 불러오기 -->
+  <!-- 아래 YOUR_GOOGLE_MAPS_API_KEY를 실제 키로 변경 -->
+  <script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCXNwAAXYslr8o2Dx2N1T2vBxOw63_Xlcc&loading=async&callback=initMap&v=weekly&language=ko">
+  </script>
+
+</body>
+</html>
