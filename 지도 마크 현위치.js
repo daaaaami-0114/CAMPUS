@@ -1,80 +1,304 @@
-function initMap() {
-  // 1. 지도가 처음 열릴 때 보여줄 중심 위치 (한양대 ERICA 정문 부근)
-  const schoolCenter = { lat: 37.2975, lng: 126.8375 };
-
-  // 2. 지도 생성
-  const map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 16,
-    center: schoolCenter,
-  });
-
-  // 3. 제휴 업체 목록
-  const stores = [
-    {
-      name: "제휴 맛집 A",
-      lat: 37.2980,
-      lng: 126.8380,
-      benefit: "학생증 제시 시 음료 1잔 무료"
-    },
-    {
-      name: "제휴 카페 B",
-      lat: 37.2970,
-      lng: 126.8365,
-      benefit: "아메리카노 500원 할인"
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한양대학교 ERICA 제휴 맵 (Plus Code 지원)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif; color: #333; }
+    
+    /* 상단 필터바 */
+    #filter-bar {
+      height: 70px;
+      background: #003666; /* ERICA 네이비 */
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 15px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      z-index: 10;
+      position: relative;
     }
-  ];
+    #filter-bar h2 { font-size: 18px; font-weight: 700; white-space: nowrap; }
+    
+    .select-group { display: flex; align-items: center; gap: 8px; }
+    .select-group label { font-size: 14px; font-weight: 500; }
+    
+    select {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      background-color: #ffffff;
+      color: #333;
+    }
 
-  // 4. 제휴 업체 핀(마커) 꽂기
-  stores.forEach((store) => {
-    const marker = new google.maps.Marker({
-      position: { lat: store.lat, lng: store.lng },
-      map: map,
-      title: store.name,
-    });
+    /* 지도 영역 */
+    #map {
+      width: 100vw;
+      height: calc(100vh - 70px);
+    }
 
-    const infoWindow = new google.maps.InfoWindow({
-      content: `
-        <div style="padding:5px;">
-          <h3 style="margin:0 0 5px 0;">${store.name}</h3>
-          <p style="margin:0;">혜택: ${store.benefit}</p>
-        </div>
-      `,
-    });
+    /* Google InfoWindow 내부 카드 스타일 */
+    .benefit-card {
+      width: 260px;
+      padding: 6px 4px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .benefit-card .header-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .benefit-card h3 { font-size: 16px; color: #003666; margin-bottom: 2px; }
+    .benefit-card .category { font-size: 12px; color: #666; margin-bottom: 10px; }
+    
+    .benefit-card .info-section {
+      border-top: 1px solid #eee;
+      padding-top: 8px;
+      margin-top: 6px;
+    }
+    .benefit-card .info-title { font-weight: 700; color: #111; margin-bottom: 2px; }
+    .benefit-card .benefit-text { color: #e63946; font-weight: 700; font-size: 14px; }
+    .benefit-card .condition-text { color: #555; }
+    .benefit-card .period-text { color: #888; font-size: 11px; }
 
-    marker.addListener("click", () => {
-      infoWindow.open(map, marker);
-    });
-  }); // <-- 여기서 stores.forEach가 완전히 끝납니다!
+    /* 소속 주체별 태그 색상 */
+    .tag-총학생회 { background-color: #e63946; }
+    .tag-단과대 { background-color: #2a9d8f; }
+    .tag-학과 { background-color: #457b9d; }
+    .tag-동아리 { background-color: #f4a261; }
+  </style>
+</head>
+<body>
 
-  // 5. 접속자 실시간 현위치 표시 기능 (forEach 바깥쪽에 위치!)
-  if (navigator.geolocation) {
-    let userMarker = new google.maps.Marker({
-      map: map,
-      title: "내 현재 위치",
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 8,
-        fillColor: "#4285F4",
-        fillOpacity: 1,
-        strokeColor: "#ffffff",
-        strokeWeight: 2,
-      },
-    });
+  <!-- 필터바 -->
+  <div id="filter-bar">
+    <h2>ERICA 제휴 맵</h2>
+    
+    <div class="select-group">
+      <label for="main-category">소속 분류:</label>
+      <select id="main-category">
+        <option value="ALL">전체 보기</option>
+        <option value="총학생회">총학생회</option>
+        <option value="단과대">단과대</option>
+        <option value="학과">학과</option>
+        <option value="동아리">동아리</option>
+      </select>
+    </div>
 
-    navigator.geolocation.watchPosition(
-      (position) => {
-        const currentPos = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        userMarker.setPosition(currentPos);
-      },
-      (error) => {
-        console.warn("위치 정보를 가져올 수 없습니다:", error);
+    <div class="select-group">
+      <label for="sub-category">하위 항목:</label>
+      <select id="sub-category" disabled>
+        <option value="ALL">전체 항목</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- 지도 영역 -->
+  <div id="map"></div>
+
+  <script>
+    // -------------------------------------------------------------
+    // 1. 카테고리 매핑 데이터
+    // -------------------------------------------------------------
+    const subCategories = {
+      "총학생회": ["제43대 총학생회"],
+      "단과대": ["소프트웨어융합대학", "공과대학", "과학기술융합대학", "약학대학"],
+      "학과": ["지능정보양자공학과", "컴퓨터학부", "ICT융합학부", "기계공학과"],
+      "동아리": ["중앙동아리 연합", "컴퓨터 학술동아리", "밴드 동아리"]
+    };
+
+    // -------------------------------------------------------------
+    // 2. Mock Data (구글 플러스 코드 기반)
+    // -------------------------------------------------------------
+    const mockPartners = [
+      {
+        id: 1,
+        name: "알촌 ERICA점",
+        category: "한식 / 퓨전",
+        plusCode: "7RWP+X6 안산시",
+        orgType: "학과",
+        orgName: "지능정보양자공학과",
+        benefit: "알밥 주문 시 음료 1캔 무료 제공",
+        condition: "지능정보양자공학과 모바일 학생증 제시",
+        period: "2026.03.01 ~ 2026.12.31"
       },
       {
-        enableHighAccuracy: true,
+        id: 2,
+        name: "투썸플레이스 안산한양대점",
+        category: "카페 / 디저트",
+        plusCode: "7RWM+PM 안산시",
+        orgType: "총학생회",
+        orgName: "제43대 총학생회",
+        benefit: "전 제조 음료 10% 현장 할인",
+        condition: "한양대 ERICA 재학생 학생증 제시 (타 쿠폰 중복 불가)",
+        period: "2026.01.01 ~ 2026.12.31"
+      },
+      {
+        id: 3,
+        name: "한양 포차",
+        category: "주점",
+        plusCode: "7RXP+7J 안산시",
+        orgType: "단과대",
+        orgName: "소프트웨어융합대학",
+        benefit: "테이블당 황도 또는 음료수 서비스",
+        condition: "소프트웨어융합대학 소속 학생 2인 이상 포함 시",
+        period: "2026.03.01 ~ 2026.08.31"
+      },
+      {
+        id: 4,
+        name: "도스마스 한양대점",
+        category: "멕시칸 / 부리또",
+        plusCode: "7RWM+CF 안산시",
+        orgType: "동아리",
+        orgName: "컴퓨터 학술동아리",
+        benefit: "세트 메뉴 변경 시 음료 무료 사이즈업",
+        condition: "동아리 부원 증명서/모바일 바코드 제시",
+        period: "2026.03.01 ~ 2026.11.30"
       }
-    );
-  }
-}
+    ];
+
+    // -------------------------------------------------------------
+    // 3. 지도, Geocoder 및 상태 변수
+    // -------------------------------------------------------------
+    let map;
+    let geocoder;
+    let currentMarkers = [];
+    let currentInfoWindow = null;
+    const locationCache = {};
+
+    function initMap() {
+      const ericaCenter = { lat: 37.2972, lng: 126.8350 };
+      
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 16,
+        center: ericaCenter,
+      });
+
+      geocoder = new google.maps.Geocoder();
+      currentInfoWindow = new google.maps.InfoWindow();
+
+      // 초기 마커 렌더링
+      filterAndRender();
+    }
+
+    // -------------------------------------------------------------
+    // 4. 플러스 코드를 좌표로 변환하여 마커 생성 및 필터링
+    // -------------------------------------------------------------
+    function filterAndRender() {
+      const mainVal = document.getElementById('main-category').value;
+      const subVal = document.getElementById('sub-category').value;
+
+      // 1) 기존 마커 및 정보창 제거
+      currentMarkers.forEach(marker => marker.setMap(null));
+      currentMarkers = [];
+      if (currentInfoWindow) currentInfoWindow.close();
+
+      // 2) 조건 필터링
+      const filtered = mockPartners.filter(item => {
+        const matchMain = (mainVal === 'ALL') || (item.orgType === mainVal);
+        const matchSub = (subVal === 'ALL') || (item.orgName === subVal);
+        return matchMain && matchSub;
+      });
+
+      // 3) 필터링된 업체마다 플러스 코드로 좌표 변환 후 마커 생성
+      filtered.forEach(store => {
+        if (locationCache[store.plusCode]) {
+          createMarker(store, locationCache[store.plusCode]);
+        } else {
+          geocoder.geocode({ address: store.plusCode }, (results, status) => {
+            if (status === "OK" && results[0]) {
+              const location = results[0].geometry.location;
+              locationCache[store.plusCode] = location;
+              createMarker(store, location);
+            } else {
+              console.error(`플러스 코드 변환 실패 (${store.name} - ${store.plusCode}):`, status);
+            }
+          });
+        }
+      });
+    }
+
+    function createMarker(store, position) {
+      const marker = new google.maps.Marker({
+        position: position,
+        map: map,
+        title: store.name
+      });
+
+      currentMarkers.push(marker);
+
+      marker.addListener('click', () => {
+        const contentString = `
+          <div class="benefit-card">
+            <span class="header-tag tag-${store.orgType}">${store.orgType} | ${store.orgName}</span>
+            <h3>${store.name}</h3>
+            <div class="category">${store.category}</div>
+            
+            <div class="info-section">
+              <div class="info-title">🎁 제휴 혜택</div>
+              <div class="benefit-text">${store.benefit}</div>
+            </div>
+            
+            <div class="info-section">
+              <div class="info-title">📋 적용 조건</div>
+              <div class="condition-text">${store.condition}</div>
+            </div>
+
+            <div class="info-section">
+              <div class="info-title">📅 제휴 기간</div>
+              <div class="period-text">${store.period}</div>
+            </div>
+          </div>
+        `;
+
+        currentInfoWindow.setContent(contentString);
+        currentInfoWindow.open(map, marker);
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 5. 드롭다운 이벤트 제어
+    // -------------------------------------------------------------
+    const mainSelect = document.getElementById('main-category');
+    const subSelect = document.getElementById('sub-category');
+
+    mainSelect.addEventListener('change', function() {
+      const selectedMain = this.value;
+
+      subSelect.innerHTML = '<option value="ALL">전체 항목</option>';
+
+      if (selectedMain === 'ALL') {
+        subSelect.disabled = true;
+      } else {
+        subSelect.disabled = false;
+        const options = subCategories[selectedMain] || [];
+        options.forEach(opt => {
+          const el = document.createElement('option');
+          el.value = opt;
+          el.textContent = opt;
+          subSelect.appendChild(el);
+        });
+      }
+
+      filterAndRender();
+    });
+
+    subSelect.addEventListener('change', filterAndRender);
+  </script>
+
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCXNwAAXYslr8o2Dx2N1T2vBxOw63_Xlcc&callback=initMap">
+  </script>
+</body>
+</html>
