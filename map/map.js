@@ -1,0 +1,526 @@
+// Plus Code(Open Location Code)를 { lat, lng } 좌표로 변환하는 함수
+// (전체 코드 형태 예: "8Q987RWP+XX" 또는 "8Q987RWP+XX2" 권장)
+function decodePlusCode(plusCode) {
+  const ALPHABET = "23456789CFGHJMPQRVWX";
+  const SEPARATOR = "+";
+
+  if (!plusCode || typeof plusCode !== "string") return null;
+
+  // 앞부분 지역명(예: "안산시 ")이 붙어 있으면 제거하고 대문자 변환
+  let clean = plusCode.trim().toUpperCase();
+  if (clean.includes(" ")) {
+    clean = clean.split(" ")[0];
+  }
+
+  const sepIdx = clean.indexOf(SEPARATOR);
+  if (sepIdx === -1) return null;
+
+  const digits = clean.replace(SEPARATOR, "");
+  if (digits.length < 8) {
+    console.warn("짧은 Plus Code는 기준 지역 정보가 필요합니다:", plusCode);
+    return null;
+  }
+
+  let latVal = -90.0;
+  let lngVal = -180.0;
+  let latRes = 20.0;
+  let lngRes = 20.0;
+
+  // 1. 짝수 자리 쌍(최대 10글자 = 5쌍) 디코딩
+  const pairPart = digits.slice(0, Math.min(digits.length, 10));
+  for (let i = 0; i < pairPart.length - 1; i += 2) {
+    const latDigit = ALPHABET.indexOf(pairPart[i]);
+    const lngDigit = ALPHABET.indexOf(pairPart[i + 1]);
+    if (latDigit === -1 || lngDigit === -1) return null;
+
+    latVal += latDigit * latRes;
+    lngVal += lngDigit * lngRes;
+
+    if (i < 8) {
+      latRes /= 20.0;
+      lngRes /= 20.0;
+    }
+  }
+
+  // 2. 10자리 초과 세밀 그리드 디코딩 (4x5 격자)
+  if (digits.length > 10) {
+    const extraPart = digits.slice(10);
+    for (let i = 0; i < extraPart.length; i++) {
+      const idx = ALPHABET.indexOf(extraPart[i]);
+      if (idx === -1) return null;
+
+      const row = Math.floor(idx / 4);
+      const col = idx % 4;
+      latRes /= 5.0;
+      lngRes /= 4.0;
+      latVal += row * latRes;
+      lngVal += col * lngRes;
+    }
+  }
+
+  return {
+    lat: latVal + latRes / 2.0,
+    lng: lngVal + lngRes / 2.0,
+  };
+}
+
+function initMap() {
+  // 1. 한양대 ERICA 캠퍼스 중심 좌표
+  const schoolCenter = { lat: 37.2975, lng: 126.8375 };
+
+  const map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 15,
+    center: schoolCenter,
+  });
+
+  const infoWindow = new google.maps.InfoWindow();
+
+  // 2. 제휴업체 목록 (Google Maps에서 복사한 Plus Code를 plusCode에 넣으세요)
+  const stores = [
+    // [총학생회]
+    {
+      name: "두찜 한대앞역점",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "전화 주문(3마리 이상) 음료 또는 튀김류 제공·배달비 무료, 홀/포장 시 음료 또는 튀김류 제공(배달앱 제외)",
+    },
+    {
+      name: "딥무드 파티룸",
+      org: "총학생회",
+      category: "여가",
+      plusCode: "8Q987RWP+XX",
+      benefit: "평일 주간 72,000원 / 저녁 96,000원 / All Night 120,000원, 월~목 20% 할인(리뷰 필수)",
+    },
+    {
+      name: "캣툰",
+      org: "총학생회",
+      category: "여가",
+      plusCode: "8Q987RWP+XX",
+      benefit: "공휴일 제외 평일 이용 시 이용요금 전체 10% 할인",
+    },
+    {
+      name: "술찌",
+      org: "총학생회",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "1인당 술 1병 혹은 메인안주 1개 서비스 제공",
+    },
+    {
+      name: "용가회전훠궈 안산점",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "기본 결제 금액(탕 주문 금액) 10% 할인, 리뷰 이벤트 참여 시 새우완자 제공",
+    },
+    {
+      name: "베스트검진센터",
+      org: "총학생회",
+      category: "의료",
+      plusCode: "8Q987RWP+XX",
+      benefit: "2학기 재학생 무료 국가건강검진",
+    },
+    {
+      name: "에이톤헤어 상록수점",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "현금·계좌 결제 + 네이버리뷰 작성 시 10% 할인",
+    },
+    {
+      name: "이마트 안산고잔점",
+      org: "총학생회",
+      category: "복지",
+      plusCode: "8Q987RWP+XX",
+      benefit: "캠퍼스 내 공식 행사 10만원 이상 무료배송(10:00~17:00), 5만원당 이마티콘 5천원 증정",
+    },
+    {
+      name: "고려스파랜드",
+      org: "총학생회",
+      category: "여가",
+      plusCode: "8Q987RWP+XX",
+      benefit: "찜질복 무료 제공 + ERICA 전용 네이버 예약 시 1,000원 추가 할인(야간 할증 제외, 중복 적용 가능)",
+    },
+    {
+      name: "형제들감자탕 한대앞역점",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "감자탕 2~3인 라면·수제비 택1, 4인 이상 모두 제공",
+    },
+    {
+      name: "데드레빗 안산고잔점",
+      org: "총학생회",
+      category: "여가",
+      plusCode: "8Q987RWP+XX",
+      benefit: "칵테일 2잔 이상 시그니처 디저트 무료, 위스키 입문 패키지 25% 할인, 라운지 대관 시간당 20,000원(4인 기준)",
+    },
+    {
+      name: "준오헤어 안산중앙 2호점",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "전체 시술 20% 할인 및 트리트먼트 제공, 커트·드라이·부분시술 포토리뷰&페이 결제 시 5,000원 할인(네이버 예약 시)",
+    },
+    {
+      name: "백금당",
+      org: "총학생회",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "봄날의 서재 안산중앙역점",
+      org: "총학생회",
+      category: "스터디카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "4/8주 정기권 5/10일 연장, 30/50/100시간 정기권 10% 연장(키오스크 결제 후 학생증·영수증 전송 및 CCTV 확인)",
+    },
+    {
+      name: "젠젠 안산중앙점",
+      org: "총학생회",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액 20% 할인, 인스타 스토리 태그 후 크림 팬케이크류 주문 시 아이스아메리카노 1잔 제공",
+    },
+    {
+      name: "한양베이커리",
+      org: "총학생회",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "행사 상품 제외 빵 2개 이상 구매 시 결제 금액 10% 할인",
+    },
+    {
+      name: "딥다이브",
+      org: "총학생회",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "멜커피 안산중앙점",
+      org: "총학생회",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "드로잉 체험 및 음료 결제 금액 10% 할인",
+    },
+    {
+      name: "파스타리안",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "대동집 안산 고잔점",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "카사 데 타코",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "오복당",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "뽁식당",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "통영집",
+      org: "총학생회",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "결제 금액의 10% 할인",
+    },
+    {
+      name: "속눈썹전문 리반타 안산점",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "첫 방문 1만원 할인, 이후 모든 시술 5천원 할인",
+    },
+    {
+      name: "숲속네일",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "원컬러 3천원 할인, 손발 동시/이달의 아트 10% 할인, 속눈썹펌 히팅펌 1만5천원/블랙컬펌 5천원 할인, 연장 5천원 할인",
+    },
+    {
+      name: "브로우텐 속눈썹펌연장 눈썹 안산고잔점",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "첫 방문 1만원 할인, 이후 모든 시술 5천원 할인",
+    },
+    {
+      name: "다비치안경 안산 중앙역 사거리점",
+      org: "총학생회",
+      category: "뷰티",
+      plusCode: "8Q987RWP+XX",
+      benefit: "안경·선글라스 10% 할인, 병렌즈 2만원 이상 10% 할인",
+    },
+    {
+      name: "피트니스 톤",
+      org: "총학생회",
+      category: "스포츠",
+      plusCode: "8Q987RWP+XX",
+      benefit: "헬스·필라테스 10% 할인 및 운동복 제공, 1:1 PT 2회+3개월 헬스+운동복 250,000원, 필라테스 이용 시 헬스장 이용 가능",
+    },
+
+    // [단과대 - 공학대학]
+    {
+      name: "담결",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "리뷰 작성 시 음료 2인당 1개 제공(자체 리뷰 이벤트와 중복 가능)",
+    },
+    {
+      name: "빈틈",
+      org: "공학대학",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "음료 + 디저트 주문 시 500원 할인",
+    },
+    {
+      name: "스튜디오 지금 필라테스",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "등록 5% 할인(재등록 2회까지 총 3회 적용)",
+    },
+    {
+      name: "쓰리파스타",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "2인 이상 방문 시 음료 1개 무료, 현금 결제 시 인당 할인(중복 가능)",
+    },
+    {
+      name: "91콩삼",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "4인 이상 테이블 당 우동/당면사리 중 택1 제공",
+    },
+    {
+      name: "청학칡냉면",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "25,000원 이상 음료 1캔, 4인 이상&만두 주문 시 만두 추가, 5만원 이상 만두·사리 또는 음료 1캔",
+    },
+    {
+      name: "트라이뽀티",
+      org: "공학대학",
+      category: "카페",
+      plusCode: "8Q987RWP+XX",
+      benefit: "8천원 이상 구매 시 500원 할인",
+    },
+    {
+      name: "레드버튼 고잔점",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "음식 & 음료 10% 할인",
+    },
+    {
+      name: "인더비엣",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "3인 이상 방문 시 음료 1캔 또는 튀김 택1 제공(네이버 리뷰 중복 가능)",
+    },
+    {
+      name: "탐나는 바지락 손칼국수",
+      org: "공학대학",
+      category: "식당",
+      plusCode: "8Q987RWP+XX",
+      benefit: "현금/계좌이체 시 10% 할인",
+    },
+    {
+      name: "밤새",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "2~4인 사리·음료·주먹밥 택1, 5~8인 감자튀김·계란찜 택1 또는 생맥주 1700cc→2700cc(테이블당 1회)",
+    },
+    {
+      name: "브리쓰 복싱 앤 크로스핏",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "3개월 이상 최초 가입 시 2만원 추가 할인 + 사물함·티셔츠 이용권 무료",
+    },
+    {
+      name: "샛별 코인노래연습장",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "3,000원 이상 결제 시 물 1병 제공",
+    },
+    {
+      name: "슈퍼스타 코인노래연습장",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "3,000원 이상 물 1병, 9곡 이상 2곡 추가 또는 30분 이상 10분 추가(중복 가능)",
+    },
+    {
+      name: "큐 당구장",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "만원 이상 이용 시 5% 할인",
+    },
+    {
+      name: "트윈스 당구클럽",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "기본 시간 초과 시 10분당 100원 할인",
+    },
+    {
+      name: "포세이돈 PC 카페",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "만원 이상 충전 시 음료 S, 2만원 이상 충전 시 음료 L 제공",
+    },
+    {
+      name: "한양사 인쇄복사제본",
+      org: "공학대학",
+      category: "기타",
+      plusCode: "8Q987RWP+XX",
+      benefit: "5,000원 이상 현금 또는 계좌이체 시 10% 할인",
+    },
+    {
+      name: "달달포차",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "계좌이체 시 10% 할인 또는 주류 1병 500원 할인(중복 불가)",
+    },
+    {
+      name: "더술",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "생일자 동반 4인 이상 방문 시 서비스 안주 뽑기(생일 전·후 1일, 스토리 태그 및 안주 주문 필수)",
+    },
+    {
+      name: "동그라미(써클)",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "4인 이상 음료수 1개 제공, 현금 또는 계좌이체 시 5% 할인",
+    },
+    {
+      name: "락",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "9시 전까지 소주 무제한 4,000원",
+    },
+    {
+      name: "로드락비어",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "탕 세트 주문 시 음료 또는 주류 1병 제공, 20인 이상 테이블당 주류 1병 제공(중복 불가)",
+    },
+    {
+      name: "만취",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "4인 이상 파인애플 샤베트 / 병당 500원 할인 / 계좌·현금 5% 할인 / 시험기간 3인 이상 주류 반값(중복 불가)",
+    },
+    {
+      name: "에이플러스",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "찌개류 라면사리 무한리필, 10인 이하 쭈쭈바 인당 1개, 8시 이전 소주 1병 무료(중복 가능·스토리 태그 필요)",
+    },
+    {
+      name: "연적할머니맥주",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "테이블당 음료 1개 제공",
+    },
+    {
+      name: "이스턴문",
+      org: "공학대학",
+      category: "술집",
+      plusCode: "8Q987RWP+XX",
+      benefit: "12~17시 인당 음료 500원 할인, 17시 이후 주류 4잔 이상 감자칩 1개 제공(중복 불가)",
+    },
+  ];
+
+  // 3. Plus Code를 좌표로 변환해 마커 표시
+  stores.forEach((store) => {
+    const position = decodePlusCode(store.plusCode);
+    if (!position) return;
+
+    const marker = new google.maps.Marker({
+      map: map,
+      position: position,
+      title: store.name,
+    });
+
+    marker.addListener("click", () => {
+      infoWindow.setContent(`
+        <div style="padding:8px; max-width:260px; line-height:1.4;">
+          <div style="font-size:11px; color:#555;">${store.org} · ${store.category}</div>
+          <h3 style="margin:4px 0;">${store.name}</h3>
+          <p style="margin:0; font-size:13px;">혜택: ${store.benefit}</p>
+        </div>
+      `);
+      infoWindow.open(map, marker);
+    });
+  });
+
+  // 4. 접속자 실시간 현위치 표시
+  if (navigator.geolocation) {
+    const userMarker = new google.maps.Marker({
+      map: map,
+      title: "내 현재 위치",
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: "#4285F4",
+        fillOpacity: 1,
+        strokeColor: "#ffffff",
+        strokeWeight: 2,
+      },
+    });
+
+    navigator.geolocation.watchPosition(
+      (position) => {
+        userMarker.setPosition({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+      },
+      (error) => console.warn("위치 정보 오류:", error),
+      { enableHighAccuracy: true }
+    );
+  }
+}
