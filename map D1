@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>우리 대학 제휴 업체 지도</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+    }
+
+    /* 상단 헤더 (한양대 시그니처 컬러 #003666 적용) */
+    #header {
+      height: 70px;
+      background-color: #003666;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      position: relative;
+      z-index: 10;
+    }
+
+    #header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    /* 소속 & 분야 선택 필터 영역 */
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-item label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #e2e8f0;
+    }
+
+    .filter-item select {
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: none;
+      background-color: #ffffff;
+      color: #003666;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* 지도가 상단 바 제외 화면 전체를 꽉 채우도록 설정 */
+    #map {
+      width: 100%;
+      height: calc(100vh - 70px);
+    }
+  </style>
+</head>
+<body>
+  <!-- 상단 한양대 컬러 바 & 필터 선택 -->
+  <header id="header">
+    <h1>우리 대학 제휴 업체 지도</h1>
+    
+    <div class="filter-group">
+      <div class="filter-item">
+        <label for="org-select">소속</label>
+        <select id="org-select">
+          <option value="ALL">전체 소속</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="category-select">분야</label>
+        <select id="category-select">
+          <option value="ALL">전체 분야</option>
+        </select>
+      </div>
+    </div>
+  </header>
+  
+  <!-- 지도가 실제로 그려질 공간 -->
+  <div id="map"></div>
+
+  <!-- 자바스크립트 파일 연결 -->
+  <script src="map.js"></script>
+  
+  <!-- 구글 지도 불러오기 -->
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCXNwAAXYslr8o2Dx2N1T2vBxOw63_Xlcc&libraries=places&callback=initMap">
+  </script>
+</body>
+</html>
